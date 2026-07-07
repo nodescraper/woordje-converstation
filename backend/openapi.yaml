@@ -1,0 +1,643 @@
+openapi: 3.0.3
+info:
+  title: woordje conversation API
+  version: 1.0.0
+  description: |
+    A **stateless, multi-language** chat-generation and language-analysis service.
+
+    This backend does two things and stores nothing:
+
+    1. **Generates** conversational replies from an LLM (blocking or streaming, with a
+       live "thinking" channel), in whatever target language the request asks for.
+    2. **Analyses** text deterministically — spaCy tokenisation/lemmatisation +
+       wordfreq frequency ranking + a pluggable grammar layer — and corrects a
+       learner's sentence, grounded in the parse.
+
+    All product state (vocabulary, personas, topics, level, chosen model) lives on the
+    **client** and is passed with each request. That is what makes the API reusable
+    across clients and languages.
+
+    ### Graceful degradation
+    Every deterministic layer degrades instead of failing. If a spaCy model for the
+    requested language is not installed, analysis falls back to a regex tokenizer and
+    grammar drops to morphology-only. Call `GET /api/meta` to see, per language, exactly
+    which capabilities are live right now.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  contact:
+    name: Balázs Csutar
+    url: https://woordje.eu
+
+servers:
+  - url: http://localhost:5001
+    description: Local development server
+
+tags:
+  - name: meta
+    description: Capability discovery — what languages and models are available.
+  - name: conversation
+    description: Generate the assistant's next turn.
+  - name: analysis
+    description: Analyse and correct the learner's own text.
+  - name: reference
+    description: Word lookups and article extraction.
+
+paths:
+  /api/meta:
+    get:
+      tags: [meta]
+      summary: Capabilities — languages + models
+      description: |
+        Everything the frontend needs to configure itself: the reachable LLM providers
+        and every supported language with its live capability flags (is the spaCy model
+        installed? is wordfreq available? what grammar depth applies?). Contains **no**
+        product data.
+      responses:
+        "200":
+          description: Capability report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Meta"
+              example:
+                spacy: true
+                wordfreq: true
+                article: true
+                defaultProvider: lmstudio
+                defaultLang: nl
+                providers:
+                  - key: lmstudio
+                    label: LM Studio (local)
+                    model: qwen3.5-0.8b
+                    local: true
+                    available: true
+                  - key: deepseek
+                    label: DeepSeek
+                    model: deepseek-v4-flash
+                    local: false
+                    available: true
+                languages:
+                  - code: nl
+                    name: Dutch
+                    spacy: true
+                    spacyModel: nl_core_news_sm
+                    wordfreq: true
+                    dictionary: true
+                    grammar: full
+                    ruleset: nl
+                  - code: de
+                    name: German
+                    spacy: true
+                    spacyModel: de_core_news_sm
+                    wordfreq: true
+                    dictionary: true
+                    grammar: full
+                    ruleset: de
+                  - code: fr
+                    name: French
+                    spacy: false
+                    spacyModel: fr_core_news_sm
+                    wordfreq: true
+                    dictionary: true
+                    grammar: morphology
+                    ruleset: generic
+
+  /api/health:
+    get:
+      tags: [meta]
+      summary: Liveness + capability summary
+      description: A compact, cheap check suitable for uptime monitors and CI smoke tests.
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+              example:
+                ok: true
+                spacy: true
+                wordfreq: true
+                article: true
+                installedLanguages: [nl, en, de]
+                defaultLang: nl
+
+  /api/turn:
+    post:
+      tags: [conversation]
+      summary: Generate the assistant's next reply (blocking)
+      description: |
+        Produce the assistant's next message given the conversation so far, then return
+        it fully **annotated** in the target language. Retries internally a few times if
+        the model returns an empty reply.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TurnRequest"
+            example:
+              lang: nl
+              level: A2
+              topic: daily life
+              provider: lmstudio
+              persona: A friendly barista making small talk.
+              history:
+                - role: user
+                  content: Hoi! Hoe gaat het?
+              vocab: [hoi, gaan, het, goed]
+      responses:
+        "200":
+          description: |
+            Result. Note the HTTP status is 200 even for a handled generation failure —
+            inspect the `ok` field. `retryable` tells you whether trying again may help.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TurnResponse"
+              example:
+                ok: true
+                error: null
+                used: [hoi, gaan]
+                annotated:
+                  text: Met mij gaat het goed, en met jou?
+                  lang: nl
+                  tokens:
+                    - kind: gap
+                      surface: Met
+                      lemma: met
+                      pos: ADP
+                      pos_abbr: prep
+                      rank: 42
+                      morph: []
+                  grammar:
+                    primary:
+                      id: present_simple
+                      name: Present tense
+                      explain: The verb agrees with the subject in the present.
+                      example: gaat
+                    all: []
+                    ruleset: nl
+
+  /api/turn_stream:
+    post:
+      tags: [conversation]
+      summary: Generate the assistant's next reply (streaming, SSE)
+      description: |
+        Same input as `/api/turn`, but streamed as **Server-Sent Events** so the UI can
+        render the model's reasoning and content live.
+
+        Each event is a line `data: {json}\n\n`. Event shapes by `type`:
+
+        - `{"type":"reasoning","delta":"..."}` — a chunk of the model's thinking channel
+        - `{"type":"content","delta":"..."}` — a chunk of the visible reply
+        - `{"type":"error","error":"...","retryable":bool}` — generation failed
+        - `{"type":"done","annotated":{...},"used":[...]}` — final annotated reply
+
+        > Swagger UI cannot render a live SSE stream in "Try it out" — it will show the
+        > raw event text. Use `curl -N` or the frontend to see it stream.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TurnRequest"
+            example:
+              lang: de
+              level: B1
+              topic: travel
+              provider: lmstudio
+              history:
+                - role: user
+                  content: Ich möchte nach Berlin reisen.
+      responses:
+        "200":
+          description: An `text/event-stream` of newline-delimited SSE events.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              example: |
+                data: {"type":"reasoning","delta":"The user wants to talk about travel..."}
+
+                data: {"type":"content","delta":"Berlin ist"}
+
+                data: {"type":"content","delta":" eine tolle Wahl!"}
+
+                data: {"type":"done","annotated":{"text":"Berlin ist eine tolle Wahl!","lang":"de","tokens":[],"grammar":{"primary":null,"all":[],"ruleset":"de"}},"used":[]}
+
+  /api/analyze:
+    post:
+      tags: [analysis]
+      summary: Analyse + correct the learner's message
+      description: |
+        Deterministically annotate the learner's own text (tokens, ranks, grammar) and,
+        unless `correct` is `false`, return an LLM correction that is grounded in the
+        spaCy parse.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeRequest"
+            example:
+              lang: nl
+              level: A2
+              provider: lmstudio
+              text: Ik ga naar de winkel gisteren.
+              correct: true
+      responses:
+        "200":
+          description: Annotation, and a correction when requested.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyzeResponse"
+              example:
+                annotated:
+                  text: Ik ga naar de winkel gisteren.
+                  lang: nl
+                  tokens: []
+                  grammar: { primary: null, all: [], ruleset: nl }
+                correction:
+                  corrected: Ik ben gisteren naar de winkel gegaan.
+                  changes:
+                    - from: ga
+                      to: ben ... gegaan
+                      why: Past events use the perfect tense.
+                  clean: false
+                  why: Time adverb "gisteren" requires a past tense.
+
+  /api/word:
+    post:
+      tags: [reference]
+      summary: Look up one word (meaning + frequency)
+      description: |
+        Meaning and an approximate frequency rank for a single lemma in the target
+        language. Whether the word is "known" is the client's concern, not the backend's.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WordRequest"
+            example:
+              lang: nl
+              lemma: fiets
+              online: true
+      responses:
+        "200":
+          description: Word detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WordResponse"
+              example:
+                lemma: fiets
+                lang: nl
+                meaning: bicycle
+                examples: ["Ik ga met de fiets."]
+                rank: 1834
+
+  /api/article:
+    post:
+      tags: [reference]
+      summary: Fetch + extract an article's main text
+      description: |
+        Download a URL and extract the main article text with Trafilatura, so it can be
+        used as conversation material. Language-agnostic.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArticleRequest"
+            example:
+              url: https://example.com/some-news-article
+      responses:
+        "200":
+          description: Extracted article
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArticleResponse"
+              example:
+                ok: true
+                title: Example headline
+                text: The full extracted body text of the article...
+                url: https://example.com/some-news-article
+        "400":
+          description: No URL provided
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArticleResponse"
+              example: { ok: false, error: No URL provided. }
+        "422":
+          description: Page fetched but no article text could be extracted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArticleResponse"
+              example: { ok: false, error: "Couldn't extract article text from that page. Try a direct article link." }
+        "500":
+          description: Fetch failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArticleResponse"
+              example: { ok: false, error: "Fetch failed: ConnectionError." }
+
+components:
+  schemas:
+
+    ChatMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+      example: { role: user, content: "Hoi!" }
+
+    Provider:
+      type: object
+      properties:
+        key: { type: string, example: lmstudio }
+        label: { type: string, example: LM Studio (local) }
+        model: { type: string, example: qwen3.5-0.8b }
+        local: { type: boolean, example: true }
+        available: { type: boolean, example: true }
+
+    LanguageCapability:
+      type: object
+      properties:
+        code: { type: string, example: nl }
+        name: { type: string, example: Dutch }
+        spacy:
+          type: boolean
+          description: Is the spaCy model for this language installed right now?
+        spacyModel:
+          type: string
+          description: The pip/spaCy package name for this language's model.
+          example: nl_core_news_sm
+        wordfreq:
+          type: boolean
+          description: Is frequency ranking available for this language?
+        dictionary:
+          type: boolean
+          description: Is a web dictionary reachable for this language?
+        grammar:
+          type: string
+          enum: [full, generic, morphology]
+          description: |
+            Grammar depth the learner gets:
+            `full` = hand-tuned ruleset, `generic` = cross-language UD rules,
+            `morphology` = morphology only (no spaCy model installed).
+        ruleset:
+          type: string
+          description: Which grammar module handles this language (`nl`, `de`, or `generic`).
+          example: nl
+
+    Meta:
+      type: object
+      properties:
+        spacy: { type: boolean, description: "Is the spaCy library importable at all?" }
+        wordfreq: { type: boolean }
+        article: { type: boolean, description: "Is Trafilatura installed?" }
+        defaultProvider: { type: string, example: lmstudio }
+        defaultLang: { type: string, example: nl }
+        providers:
+          type: array
+          items: { $ref: "#/components/schemas/Provider" }
+        languages:
+          type: array
+          items: { $ref: "#/components/schemas/LanguageCapability" }
+
+    Health:
+      type: object
+      properties:
+        ok: { type: boolean, example: true }
+        spacy: { type: boolean }
+        wordfreq: { type: boolean }
+        article: { type: boolean }
+        installedLanguages:
+          type: array
+          items: { type: string }
+          example: [nl, en, de]
+        defaultLang: { type: string, example: nl }
+
+    Token:
+      type: object
+      description: One analysed token. Punctuation tokens carry only `kind` and `surface`.
+      properties:
+        kind:
+          type: string
+          enum: [known, gap, unknown, stop, punct]
+          description: |
+            `known` = in the client's vocab; `gap` = important word the learner likely
+            doesn't know; `unknown` = rare/uncommon; `stop` = function word; `punct`.
+        surface: { type: string, example: gaat }
+        lemma: { type: string, example: gaan }
+        pos: { type: string, description: Universal POS tag, example: VERB }
+        pos_abbr: { type: string, example: verb }
+        rank:
+          type: integer
+          nullable: true
+          description: Approximate frequency rank (lower = more common); null if unknown.
+          example: 88
+        morph:
+          type: array
+          items: { type: string }
+          description: Human-readable morphological features.
+          example: [present tense, singular]
+
+    Construction:
+      type: object
+      nullable: true
+      properties:
+        id: { type: string, example: present_simple }
+        name: { type: string, example: Present tense }
+        explain: { type: string, example: The verb agrees with the subject in the present. }
+        example: { type: string, example: gaat }
+
+    Grammar:
+      type: object
+      properties:
+        primary:
+          allOf: [{ $ref: "#/components/schemas/Construction" }]
+          description: Highest-priority construction at or below the requested level.
+        all:
+          type: array
+          items: { $ref: "#/components/schemas/Construction" }
+        ruleset:
+          type: string
+          description: Which grammar module produced this (`nl`, `de`, `generic`).
+          example: nl
+
+    Annotated:
+      type: object
+      properties:
+        text: { type: string }
+        lang: { type: string, example: nl }
+        tokens:
+          type: array
+          items: { $ref: "#/components/schemas/Token" }
+        grammar: { $ref: "#/components/schemas/Grammar" }
+
+    TurnRequest:
+      type: object
+      description: |
+        The conversation so far plus context. Everything except `history` is optional and
+        defaults sensibly. `vocab` is the learner's known words (array of lemmas, or an
+        object keyed by lemma) — the backend uses it only to classify tokens.
+      properties:
+        history:
+          type: array
+          items: { $ref: "#/components/schemas/ChatMessage" }
+        lang: { type: string, default: nl, example: nl }
+        level:
+          type: string
+          default: A2
+          enum: [A1, A2, B1, B2, C1, C2]
+        topic: { type: string, default: daily life, example: daily life }
+        provider:
+          type: string
+          description: Provider key from `/api/meta`. Defaults to the server default.
+          example: lmstudio
+        persona:
+          type: string
+          nullable: true
+          description: A short character brief for the assistant.
+        article:
+          type: string
+          nullable: true
+          description: Article text to ground the conversation in.
+        targets:
+          type: array
+          nullable: true
+          items: { type: string }
+          description: Words to try to elicit/use.
+        vocab:
+          description: The learner's known words (array of lemmas or object keyed by lemma).
+          oneOf:
+            - type: array
+              items: { type: string }
+            - type: object
+              additionalProperties: true
+
+    TurnResponse:
+      type: object
+      properties:
+        ok: { type: boolean }
+        error: { type: string, nullable: true }
+        retryable:
+          type: boolean
+          description: Present on failures — whether trying again may succeed.
+        annotated:
+          allOf: [{ $ref: "#/components/schemas/Annotated" }]
+          nullable: true
+        used:
+          type: array
+          items: { type: string }
+          description: Which of the learner's known words appeared in their last message.
+
+    AnalyzeRequest:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, example: "Ik ga naar de winkel gisteren." }
+        lang: { type: string, default: nl }
+        level: { type: string, default: A2, enum: [A1, A2, B1, B2, C1, C2] }
+        provider: { type: string, example: lmstudio }
+        correct:
+          type: boolean
+          default: true
+          description: Set false to skip the LLM correction and only annotate.
+        vocab:
+          oneOf:
+            - type: array
+              items: { type: string }
+            - type: object
+              additionalProperties: true
+
+    Correction:
+      type: object
+      nullable: true
+      properties:
+        corrected: { type: string }
+        changes:
+          type: array
+          items:
+            type: object
+            properties:
+              from: { type: string }
+              to: { type: string }
+              why: { type: string }
+        clean:
+          type: boolean
+          description: True when the learner's sentence needed no changes.
+        why: { type: string }
+        error:
+          type: string
+          description: Present instead of the above if correction was unavailable.
+
+    AnalyzeResponse:
+      type: object
+      properties:
+        annotated: { $ref: "#/components/schemas/Annotated" }
+        correction: { $ref: "#/components/schemas/Correction" }
+
+    WordRequest:
+      type: object
+      required: [lemma]
+      properties:
+        lemma: { type: string, example: fiets }
+        lang: { type: string, default: nl }
+        online:
+          type: boolean
+          default: true
+          description: Whether to hit the web dictionary (false = frequency only).
+
+    WordResponse:
+      type: object
+      properties:
+        lemma: { type: string }
+        lang: { type: string }
+        meaning: { type: string }
+        definition:
+          type: string
+          nullable: true
+        translations:
+          type: array
+          items: { type: string }
+        examples:
+          type: array
+          items: { type: string }
+        partOfSpeech:
+          type: string
+          nullable: true
+        pronunciation:
+          type: string
+          nullable: true
+        rank:
+          type: integer
+          nullable: true
+
+    ArticleRequest:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, example: "https://example.com/some-news-article" }
+
+    ArticleResponse:
+      type: object
+      properties:
+        ok: { type: boolean }
+        title: { type: string }
+        text: { type: string }
+        url: { type: string }
+        error: { type: string, nullable: true }

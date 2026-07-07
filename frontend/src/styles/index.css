@@ -1,0 +1,127 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 98%;
+    --foreground: 0 0% 6%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 6%;
+    --primary: 0 0% 6%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 10%;
+    --muted: 0 0% 94%;
+    --muted-foreground: 0 0% 38%;
+    --accent: 0 0% 12%;
+    --accent-foreground: 0 0% 98%;
+    --teal: 0 0% 22%;
+    --border: 0 0% 78%;
+    --input: 0 0% 78%;
+    --ring: 0 0% 10%;
+    --known: 210 52% 34%;
+    --gap: 32 72% 38%;
+    --unknown: 0 0% 44%;
+    --success: 142 48% 34%;
+    --error: 8 58% 42%;
+    --radius: 0rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html,
+  body,
+  #root {
+    min-height: 100%;
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--foreground) / 0.35) hsl(var(--card));
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: hsl(var(--card));
+}
+
+*::-webkit-scrollbar-thumb {
+  background: hsl(var(--foreground) / 0.35);
+  border: 0;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--foreground) / 0.5);
+}
+
+*::-webkit-scrollbar-corner {
+  background: hsl(var(--card));
+}
+
+/* ---- annotation tokens (deterministic word highlighting) ---- */
+.w-known {
+  color: hsl(var(--known));
+  border-bottom: 1px solid hsl(var(--known) / 0.55);
+  cursor: pointer;
+}
+.w-gap {
+  color: hsl(var(--gap));
+  border-bottom: 1px dashed hsl(var(--gap) / 0.6);
+  cursor: pointer;
+}
+.w-unknown {
+  color: hsl(var(--unknown));
+  cursor: pointer;
+}
+.w-known:hover,
+.w-gap:hover,
+.w-unknown:hover {
+  filter: brightness(0.92);
+}
+
+.tone-known {
+  color: hsl(var(--known));
+  border-color: hsl(var(--known) / 0.35);
+  background: hsl(var(--known) / 0.08);
+}
+
+.tone-gap {
+  color: hsl(var(--gap));
+  border-color: hsl(var(--gap) / 0.35);
+  background: hsl(var(--gap) / 0.08);
+}
+
+.tone-unknown {
+  color: hsl(var(--unknown));
+  border-color: hsl(var(--unknown) / 0.25);
+  background: hsl(var(--unknown) / 0.06);
+}
+
+.tone-success {
+  color: hsl(var(--success));
+  border-color: hsl(var(--success) / 0.35);
+  background: hsl(var(--success) / 0.08);
+}
+
+.tone-error {
+  color: hsl(var(--error));
+  border-color: hsl(var(--error) / 0.35);
+  background: hsl(var(--error) / 0.08);
+}
+
+/* streaming cursor */
+.cursor-blink {
+  animation: blink 1s steps(2) infinite;
+}
+@keyframes blink {
+  50% { opacity: 0; }
+}

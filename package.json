@@ -1,0 +1,44 @@
+{
+  "name": "woordje-conversation",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A language-agnostic sandbox for LLM + deterministic-NLP language practice. A stateless Flask API (spaCy, wordfreq, a pluggable grammar layer, dictionary lookups) plus a React frontend, wired so meaning/highlighting/grammar come from real tools and only the conversation comes from the model.",
+  "author": "Balázs Csutar (https://woordje.eu)",
+  "license": "MIT",
+  "homepage": "https://github.com/BalazsCsutar222855/woordje-conversation#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BalazsCsutar222855/woordje-conversation.git"
+  },
+  "bugs": {
+    "url": "https://github.com/BalazsCsutar222855/woordje-conversation/issues"
+  },
+  "keywords": [
+    "language-learning",
+    "llm",
+    "nlp",
+    "spacy",
+    "wordfreq",
+    "flask",
+    "react",
+    "vite",
+    "openapi",
+    "swagger",
+    "sandbox",
+    "multilingual"
+  ],
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "setup": "./setup.sh",
+    "backend": "./run-backend.sh",
+    "frontend": "./run-frontend.sh",
+    "dev": "./run-frontend.sh",
+    "build": "npm --prefix frontend run build",
+    "test": "cd backend && python -m pytest -q"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

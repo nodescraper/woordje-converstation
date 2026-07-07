@@ -1,0 +1,19 @@
+# --- core API ---
+flask>=3.0
+openai>=1.40            # OpenAI-compatible client (LM Studio, DeepSeek, Gemini, Ollama, ...)
+
+# --- deterministic NLP layer ---
+spacy>=3.7              # lemma / POS / morphology
+wordfreq>=3.1           # frequency ranking (multi-language)
+
+# --- news / article context ---
+trafilatura>=2.0        # extract clean article text from a URL to talk about
+
+# NOTE: spaCy language MODELS are installed separately, one per language you enable.
+# They are not pip requirements because you only download the ones you use, e.g.:
+#     python -m spacy download nl_core_news_sm
+#     python -m spacy download en_core_web_sm
+#     python -m spacy download de_core_news_sm
+# The model package name for each language is listed in backend/languages.py, and
+# setup.sh downloads a default set. Any language still works without its model —
+# analysis just falls back to a regex tokenizer + morphology-only grammar.
