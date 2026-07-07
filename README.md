@@ -33,6 +33,9 @@ for what it's uniquely good at (open-ended conversation), and use deterministic 
 for everything factual.** The result is a clean place to swap models in and out,
 compare them, and see exactly which layer produced which part of the output.
 
+<img width="2644" height="1694" alt="image" src="https://github.com/user-attachments/assets/bc0f5a73-c093-4d0c-8daf-2341aa6f5121" />
+
+
 ## Multi-language by design
 
 Nothing about the language is hard-coded into the logic. A single registry
