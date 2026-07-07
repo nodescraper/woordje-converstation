@@ -30,11 +30,14 @@
   "workspaces": [
     "frontend"
   ],
+  "bin": {
+    "woordje": "./scripts/woordje.mjs"
+  },
   "scripts": {
-    "setup": "./setup.sh",
-    "backend": "./run-backend.sh",
-    "frontend": "./run-frontend.sh",
-    "dev": "./run-frontend.sh",
+    "setup": "node ./scripts/woordje.mjs setup",
+    "backend": "node ./scripts/woordje.mjs backend",
+    "frontend": "node ./scripts/woordje.mjs frontend",
+    "dev": "node ./scripts/woordje.mjs dev",
     "build": "npm --prefix frontend run build",
     "test": "cd backend && python -m pytest -q"
   },

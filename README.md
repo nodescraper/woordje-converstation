@@ -93,27 +93,55 @@ API reusable across clients and languages.
 Without a model the chat can't generate replies, but **everything else still works** —
 the annotation, the word lookups, the article fetch, and the whole API surface.
 
-## Setup
+## Quick start
+
+The project now ships with a small local CLI, so you do not need to install and
+run the frontend and backend independently anymore.
 
 ```bash
-./setup.sh            # backend venv + deps + a default set of spaCy models, then npm install
+./woordje dev
 ```
 
-By default `setup.sh` installs spaCy models for **Dutch, English, and German**. To
-install a different set, pass `WOORDJE_SPACY_MODELS`:
+That command:
 
-```bash
-WOORDJE_SPACY_MODELS="nl_core_news_sm fr_core_news_sm es_core_news_sm" ./setup.sh
-```
-
-Then run the two halves in separate terminals:
-
-```bash
-./run-backend.sh      # http://localhost:5001  (the API + Swagger UI)
-./run-frontend.sh     # http://localhost:5173  (open this in the browser)
-```
+- creates the backend virtual environment if it does not exist
+- installs frontend dependencies if they are missing
+- starts the Flask API on `http://localhost:5001`
+- starts the Vite frontend on `http://localhost:5173`
 
 The frontend proxies `/api` to the backend in dev, so no extra config is needed.
+
+## CLI
+
+The root CLI is available as `./woordje`, and the same commands also work through
+`npm run ...`.
+
+```bash
+./woordje dev        # bootstrap missing deps and run backend + frontend
+./woordje setup      # full install, including default spaCy models
+./woordje backend    # run only the backend
+./woordje frontend   # run only the frontend
+./woordje help
+```
+
+Equivalent npm commands:
+
+```bash
+npm run dev
+npm run setup
+npm run backend
+npm run frontend
+```
+
+`./woordje setup` is still useful when you want the full tuned deterministic
+experience immediately, because it also installs the default spaCy models for
+**Dutch, English, and German**.
+
+To install a different model set during setup, pass `WOORDJE_SPACY_MODELS`:
+
+```bash
+WOORDJE_SPACY_MODELS="nl_core_news_sm fr_core_news_sm es_core_news_sm" ./woordje setup
+```
 
 ## Try the API without the UI
 
@@ -137,7 +165,8 @@ http://localhost:5001/api/health       # liveness + capability summary
 - **Frontend API base** — set `VITE_API_BASE` in `frontend/.env` only if hosting the
   frontend separately from the backend.
 
-Language and model can also be changed at any time from the **Settings** panel in the UI.
+Language, model, custom topic, and advanced session instructions can all be changed
+from the in-app setup flow.
 
 ## API (stateless)
 
@@ -173,9 +202,7 @@ spaCy model installed** (they exercise the graceful-fallback paths, the registry
 the grammar dispatcher):
 
 ```bash
-cd backend
-pip install -r requirements-dev.txt
-pytest -q
+npm run test
 ```
 
 CI runs these plus a frontend production build on every push

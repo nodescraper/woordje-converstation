@@ -98,6 +98,9 @@ export function StartScreen({ settings, patch, meta, onStart, onBack }) {
   const [articleUrl, setArticleUrl] = useState("");
   const [article, setArticle] = useState(null);
   const [articleState, setArticleState] = useState({ loading: false, msg: "" });
+  const [showAdvanced, setShowAdvanced] = useState(
+    Boolean(settings.customAgentContext?.trim() || settings.customTargetWords?.trim())
+  );
 
   const languages = meta?.languages || [];
   const providers = (meta?.providers || []).filter((provider) => provider.available);
@@ -250,22 +253,32 @@ export function StartScreen({ settings, patch, meta, onStart, onBack }) {
                         {topic.label}
                       </Tile>
                     ))}
-                    <Tile
-                      emoji="✏️"
-                      selected={settings.topic === "custom"}
-                      onClick={() => patch({ topic: "custom" })}
-                    >
-                      Custom
-                    </Tile>
                   </div>
-                  {settings.topic === "custom" && (
+                  <div
+                    className={cn(
+                      "mt-3 border p-4 transition-colors",
+                      settings.topic === "custom"
+                        ? "border-foreground bg-secondary"
+                        : "border-border bg-card"
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">✏️</span>
+                      <div>
+                        <div className="font-semibold">Define your own topic</div>
+                        <div className="text-sm text-muted-foreground">
+                          Use any situation or theme you want.
+                        </div>
+                      </div>
+                    </div>
                     <Input
-                      className="mt-2"
+                      className="mt-3"
                       value={settings.customTopic}
-                      onChange={(e) => patch({ customTopic: e.target.value })}
+                      onFocus={() => patch({ topic: "custom" })}
+                      onChange={(e) => patch({ topic: "custom", customTopic: e.target.value })}
                       placeholder="Type your own topic, e.g. ordering coffee at a cafe"
                     />
-                  )}
+                  </div>
                 </div>
               ) : (
                 <div>
@@ -295,6 +308,56 @@ export function StartScreen({ settings, patch, meta, onStart, onBack }) {
 
             <section className="px-6 py-6">
               <ProviderPicker providers={providers} settings={settings} patch={patch} />
+            </section>
+
+            <section className="px-6 py-6">
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((open) => !open)}
+                className="flex w-full items-center justify-between border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-secondary"
+              >
+                <div>
+                  <div className="font-semibold">Advanced settings</div>
+                  <div className="text-sm text-muted-foreground">
+                    Adjust extra agent context and which vocabulary the model should favor.
+                  </div>
+                </div>
+                <span className="font-mono text-xs uppercase text-muted-foreground">
+                  {showAdvanced ? "hide" : "show"}
+                </span>
+              </button>
+
+              {showAdvanced && (
+                <div className="mt-3 space-y-4 border border-border bg-card p-4">
+                  <div>
+                    <Label htmlFor="agent-context">Extra agent context</Label>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Add session-specific instructions for the conversation partner.
+                    </p>
+                    <textarea
+                      id="agent-context"
+                      value={settings.customAgentContext}
+                      onChange={(e) => patch({ customAgentContext: e.target.value })}
+                      placeholder="Example: Ask shorter follow-up questions and gently challenge me when I make mistakes."
+                      className="mt-2 min-h-[120px] w-full border border-input bg-secondary px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="focus-words">Focus words override</Label>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Comma-separated words the assistant should try to reuse instead of the automatic vocab shortlist.
+                    </p>
+                    <textarea
+                      id="focus-words"
+                      value={settings.customTargetWords}
+                      onChange={(e) => patch({ customTargetWords: e.target.value })}
+                      placeholder="Example: afspraak, vanavond, eigenlijk, proberen"
+                      className="mt-2 min-h-[96px] w-full border border-input bg-secondary px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    />
+                  </div>
+                </div>
+              )}
             </section>
           </div>
 
@@ -327,6 +390,25 @@ export function StartScreen({ settings, patch, meta, onStart, onBack }) {
                   {activeProvider?.label || "No provider"}{settings.model ? ` · ${settings.model}` : ""}
                 </div>
               </div>
+              {(settings.customAgentContext?.trim() || settings.customTargetWords?.trim()) && (
+                <div className="px-6 py-4">
+                  <div className="text-muted-foreground">Advanced</div>
+                  <div className="mt-1 space-y-2 text-sm">
+                    {settings.customAgentContext?.trim() && (
+                      <div>
+                        <div className="font-semibold">Extra agent context</div>
+                        <div className="text-muted-foreground">{settings.customAgentContext.trim()}</div>
+                      </div>
+                    )}
+                    {settings.customTargetWords?.trim() && (
+                      <div>
+                        <div className="font-semibold">Focus words</div>
+                        <div className="text-muted-foreground">{settings.customTargetWords.trim()}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="border-t border-border px-6 py-6">
               <Button

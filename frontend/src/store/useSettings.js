@@ -9,6 +9,8 @@ export function useSettings() {
     topic: "daily life",
     customTopic: "",
     personaId: PERSONAS[0].id,
+    customAgentContext: "",
+    customTargetWords: "",
     provider: null,  // null -> backend default until meta loads
     model: null,
   });

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, Globe, Home, Info, MessageSquare, Newspaper, Plus, UserRound } from "lucide-react";
+import { BookOpen, CircleHelp, Globe, Home, Info, MessageSquare, Newspaper, Plus, UserRound } from "lucide-react";
 import { getMeta } from "@/api/client";
 import { useVocab } from "@/store/useVocab";
 import { useSettings } from "@/store/useSettings";
@@ -7,6 +7,7 @@ import { useChat } from "@/hooks/useChat";
 import { HomeScreen } from "@/components/home/HomeScreen";
 import { StartScreen } from "@/components/start/StartScreen";
 import { ChatView } from "@/components/chat/ChatView";
+import { HelpDoc } from "@/components/help/HelpDoc";
 import { SessionSidebar } from "@/components/session/SessionSidebar";
 import { VocabPage } from "@/components/vocab/VocabPage";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ export default function App() {
   const [article, setArticle] = useState(null);
   const [activeWord, setActiveWord] = useState(null);
   const [showSessionInfo, setShowSessionInfo] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   const { settings, patch, persona, effectiveTopic } = useSettings();
 
@@ -36,6 +38,21 @@ export default function App() {
     () => meta.providers.find((provider) => provider.key === settings.provider) || meta.providers[0] || null,
     [meta.providers, settings.provider]
   );
+  const focusTargets = useMemo(() => {
+    const custom = (settings.customTargetWords || "")
+      .split(/[,\n]/)
+      .map((word) => word.trim())
+      .filter(Boolean);
+    return custom.length > 0 ? custom : vocab.words.slice(0, 12);
+  }, [settings.customTargetWords, vocab.words]);
+  const effectivePersona = useMemo(() => {
+    const extra = (settings.customAgentContext || "").trim();
+    if (!extra) return persona;
+    return {
+      ...persona,
+      prompt: `${persona?.prompt || ""}\n\nAdditional session instructions: ${extra}`.trim(),
+    };
+  }, [persona, settings.customAgentContext]);
 
   useEffect(() => {
     getMeta()
@@ -69,11 +86,11 @@ export default function App() {
     lang,
     level: settings.level,
     topic: effectiveTopic,
-    persona,
+    persona: effectivePersona,
     provider: settings.provider,
     model: settings.model,
     vocab: vocab.words,
-    targets: vocab.words.slice(0, 12),
+    targets: focusTargets,
     article,
   });
 
@@ -144,6 +161,9 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => setShowHelp(true)} aria-label="Help">
+              <CircleHelp className="h-4 w-4" />
+            </Button>
             <Button size="sm" variant="outline" onClick={() => setShowSessionInfo(true)} aria-label="Session info">
               <Info className="h-4 w-4" />
             </Button>
@@ -189,6 +209,16 @@ export default function App() {
       </div>
 
       <Popup
+        open={showHelp}
+        onClose={() => setShowHelp(false)}
+        title="Help"
+        description="A quick guide to the annotations, panels, and conversation flow."
+        className="max-w-3xl"
+      >
+        <HelpDoc />
+      </Popup>
+
+      <Popup
         open={showSessionInfo}
         onClose={() => setShowSessionInfo(false)}
         title="Session info"
@@ -213,7 +243,15 @@ export default function App() {
             <UserRound className="mt-0.5 h-4 w-4 text-foreground" />
             <div>
               <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Partner</div>
-              <div className="mt-1 font-medium">{persona}</div>
+              <div className="mt-1 font-medium">{persona?.emoji ? `${persona.emoji} ` : ""}{persona?.name || "No partner selected"}</div>
+              {persona?.prompt && (
+                <div className="mt-1 text-sm text-muted-foreground">{persona.prompt}</div>
+              )}
+              {settings.customAgentContext?.trim() && (
+                <div className="mt-2 border border-border bg-secondary px-3 py-2 text-sm text-muted-foreground">
+                  Extra context: {settings.customAgentContext.trim()}
+                </div>
+              )}
             </div>
           </div>
           <div className="flex items-start gap-3 bg-card p-4">
@@ -221,6 +259,11 @@ export default function App() {
             <div>
               <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Level and model</div>
               <div className="mt-1 font-medium">{settings.level} · {settings.model || activeProvider?.model || "No model selected"}</div>
+              {focusTargets.length > 0 && (
+                <div className="mt-2 text-sm text-muted-foreground">
+                  Focus words: {focusTargets.slice(0, 8).join(", ")}{focusTargets.length > 8 ? "..." : ""}
+                </div>
+              )}
             </div>
           </div>
         </div>
