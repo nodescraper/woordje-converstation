@@ -45,9 +45,6 @@ This project takes the opposite approach: **use the LLM only for open-ended conv
 
 ---
 
-<img width="2644" height="1694" alt="image" src="https://github.com/user-attachments/assets/bc0f5a73-c093-4d0c-8daf-2341aa6f5121" />
-
-
 ## Multi-language by design
 
 Nothing about the language is hard-coded into the logic. A single registry (`backend/languages.py`) declares each language and how its deterministic layers are wired; every request carries a `lang`, and the frontend discovers what is available from the API.
